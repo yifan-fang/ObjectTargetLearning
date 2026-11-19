@@ -456,7 +456,7 @@ var experimentName = 'TL_Exp2';   // CHANGE THIS for each new version
 /* DataPipe (pipe.jspsych.org) replaces the Dartmouth server for both
    condition assignment and saving; data files go to Google Drive.
    Paste the 12-character experiment ID from the DataPipe dashboard. */
-var DATAPIPE_EXPERIMENT_ID = "R10oJz05BZjy";
+var DATAPIPE_EXPERIMENT_ID = "QxrBHfrRiqwi";
 var assignURL = "https://pipe.jspsych.org/api/condition/";
 var saveURL   = "https://pipe.jspsych.org/api/data/";
 var nAssignConds = nCategories * nObjects;
@@ -1768,6 +1768,13 @@ function Done() {
           'id': "objAFC", 'response': response, 'answer': answer, 'accuracy': acc
         });
       }
+    }
+    else if (inputs[i].type == "checkbox") {
+      surveyResponses.push({
+        'id': inputs[i].id,
+        'response': inputs[i].checked ? inputs[i].value : 'notSelected',
+        'answer': answer, 'accuracy': 'na'
+      });
     }
     else {
       var response = inputs[i].value;
