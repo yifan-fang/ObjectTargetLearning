@@ -1769,6 +1769,13 @@ function Done() {
         });
       }
     }
+    else if (inputs[i].type == "checkbox") {
+      surveyResponses.push({
+        'id': inputs[i].id,
+        'response': inputs[i].checked ? inputs[i].value : 'notSelected',
+        'answer': answer, 'accuracy': 'na'
+      });
+    }
     else {
       var response = inputs[i].value;
       if (answers[i] == "na") { acc = "na"; }
