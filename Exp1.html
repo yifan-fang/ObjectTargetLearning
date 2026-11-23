@@ -643,7 +643,7 @@ var itiFloorMs         = 300;     // ITI never compressed below this.
                                   // clips on short ITI draws and the totals
                                   // stop matching. Checked at startup.
 
-var debug = 1;
+var debug = 0;
 if (debug == 1) {
   var nTrialsPerBlock = [1, 1, 1, 1];
   var nBlocks = [1, 1, 1, 1];
@@ -1577,10 +1577,28 @@ function AssignCondition(done) {
     }
     console.error('Ignoring invalid cond in URL: ' + urlCond);
   }
+
+  // Reload: reuse this browser's earlier assignment instead of asking DataPipe again.
+  var storeKey = 'assign_' + experimentName;
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(storeKey)); } catch (e) {}
+  if (saved && typeof saved.cond === 'number') {
+    saved.nReloads = (saved.nReloads || 0) + 1;
+    try { localStorage.setItem(storeKey, JSON.stringify(saved)); } catch (e) {}
+    baseID = saved.baseID;
+    ApplyCondition(saved.cond, saved.source + '_reload' + saved.nReloads);
+    done();
+    return;
+  }
+
   var finished = false;
   function finish(cond, source) {
     if (finished) { return; }
     finished = true;
+    try {
+      localStorage.setItem(storeKey,
+        JSON.stringify({cond: cond, source: source, baseID: baseID, nReloads: 0}));
+    } catch (e) {}
     ApplyCondition(cond, source);
     done();
   }

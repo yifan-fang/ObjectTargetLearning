@@ -82,6 +82,7 @@ function UploadData(dataString, filename) {
   }
 
   function onSaved() {
+    try { localStorage.removeItem('assign_' + experimentName); } catch (e) {}
     dataSaved = true;
     saveInProgress = false;
     ReturnToSona();
