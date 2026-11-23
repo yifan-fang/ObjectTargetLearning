@@ -1673,6 +1673,17 @@ function ApplyCondition(cond, source) {
    participant for longer than the timeout: on any failure a random
    condition is used instead. */
 function AssignCondition(done) {
+  // Refill: a link with ?cond=15 forces that condition and skips DataPipe.
+  var urlCond = new URLSearchParams(window.location.search).get('cond');
+  if (urlCond !== null) {
+    var c = parseInt(urlCond, 10);
+    if (String(c) === urlCond && c >= 0 && c < nAssignConds) {
+      ApplyCondition(c, 'url');
+      done();
+      return;
+    }
+    console.error('Ignoring invalid cond in URL: ' + urlCond);
+  }
   var finished = false;
   function finish(cond, source) {
     if (finished) { return; }

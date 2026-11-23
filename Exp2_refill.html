@@ -1,0 +1,2000 @@
+<html><head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+<script src="https://psyc241.ucsd.edu/jspsych-6.1.0/jspsych.js"></script>
+<script src="seedrandom.js"></script>
+<script src="colors.js"></script>
+<script src="SaveAndReturn.js"></script>
+<script src="https://timbrady.org/turk/TimTurkTools.js"></script>
+<script src="https://timbrady.org/turk/ensemble2011/e2/blockMobile.js"></script>
+<link rel="stylesheet" type="text/css" href="contReport.css">
+<link rel="stylesheet" type="text/css" href="showTrials.css">
+<link rel="stylesheet" type="text/css" href="experiment.css">
+<link rel="stylesheet" type="text/css" href="searchParams.css">
+<link rel="stylesheet" type="text/css" href="surveyParams.css">
+
+<!-- ================================================================ -->
+<!-- OVERLAY VERSION 8 (continuous jiggle + axis-cued displacement).   -->
+<!--                                                                   -->
+<!-- Replaces the flicker/tilt task. Both objects are transparently    -->
+<!-- superimposed and visible for the WHOLE trial. Each jiggles        -->
+<!-- independently -- small random repositioning every few tens of ms  -->
+<!-- -- so the display is continuous random motion.                    -->
+<!--                                                                   -->
+<!-- At a random moment ONE object -- the target -- makes a larger,    -->
+<!-- smooth, directed displacement along the cued axis (left/right if  -->
+<!-- cued horizontal, up/down if cued vertical). The other object       -->
+<!-- keeps jiggling and makes no displacement. A pre-cue names the      -->
+<!-- axis, and the participant reports the direction of the movement.   -->
+<!--                                                                   -->
+<!-- WHY IT IS BUILT THIS WAY:                                         -->
+<!--                                                                   -->
+<!--  1. Only the target displaces, so the target IS a motion          -->
+<!--     singleton and selection is driven by the transient rather     -->
+<!--     than by the cue. This is a deliberate choice with a real      -->
+<!--     tradeoff. An earlier version had BOTH objects displace on     -->
+<!--     orthogonal axes, so that neither was a singleton and the cued  -->
+<!--     axis was the only thing defining the target; that maximises    -->
+<!--     attentional competition, which is what a learned expectancy    -->
+<!--     about object identity has to act on. Reverting to a single     -->
+<!--     mover reduces that competition, but makes Exp2 structurally    -->
+<!--     PARALLEL TO EXP1, where only one object tilted and the target  -->
+<!--     was likewise a singleton -- which is what buys comparability   -->
+<!--     between the two experiments.                                   -->
+<!--                                                                   -->
+<!--  2. The cue is now informationally REDUNDANT for selection: the    -->
+<!--     only object that moves is the one to report, so the cue does   -->
+<!--     not pick out an object, it only narrows the response set from  -->
+<!--     four keys to two. It is kept because a 2AFC response is less   -->
+<!--     noisy than a 4AFC one and because it fixes an axis-specific    -->
+<!--     attentional set in advance. If you would rather drop it, the   -->
+<!--     task becomes a clean 4AFC "which way did it move" -- remove    -->
+<!--     the cue stage and accept any of the four arrows.               -->
+<!--                                                                   -->
+<!--  3. The attended axis is still RANDOMISED TRIAL BY TRIAL, so the   -->
+<!--     target moves horizontally and vertically equally often and    -->
+<!--     the task is not purely one axis. Note that the axis confound   -->
+<!--     that motivated randomisation in the both-move version is now   -->
+<!--     gone by construction: when the rich category is the distractor -->
+<!--     it makes no displacement at all, and when it is the target it  -->
+<!--     moves on the cued axis, which is balanced 50/50, so there is   -->
+<!--     no absolute motion axis for an object-to-direction association -->
+<!--     to attach to. Randomising                                      -->
+<!--     costs an axis-switch effect; attendAxisRepeat is logged so     -->
+<!--     switch trials can be modelled or excluded.                     -->
+<!--                                                                   -->
+<!--  4. The critical displacement is a smooth raised-cosine pulse     -->
+<!--     added on top of the ongoing jiggle: out to critAmpPx and back -->
+<!--     to zero, with zero velocity at both ends. No positional or    -->
+<!--     velocity discontinuity, so there is no transient to detect -- -->
+<!--     only a directed drift buried in the random jiggle. Difficulty -->
+<!--     is set by critAmpPx relative to the jiggle's power at the      -->
+<!--     pulse's own timescale, not by either amplitude alone. See the  -->
+<!--     titration note on those parameters.                           -->
+<!--                                                                   -->
+<!--  5. Independent per-object jiggle is a strong segregation cue via -->
+<!--     common fate. Two overlaid static objects are genuinely hard   -->
+<!--     to parse; this should give BETTER object individuation than   -->
+<!--     the flicker version did, which matters because the whole      -->
+<!--     paradigm depends on participants identifying the objects.     -->
+<!--                                                                   -->
+<!--  6. critAmpPx is kept small relative to stimSize so the two       -->
+<!--     objects stay substantially superimposed throughout. If the    -->
+<!--     displacement is large enough to pull them apart, selection    -->
+<!--     can become location-based, which is the exact thing the       -->
+<!--     overlay design exists to prevent.                             -->
+<!--                                                                   -->
+<!-- NEW IN V10: a FAMILIARIZATION BLOCK (phase 0) before practice.    -->
+<!--                                                                   -->
+<!-- Identical task, identical timing, one change: the critical        -->
+<!-- displacement is famCritAmpPx = 25 px instead of the main task's   -->
+<!-- 12-14 px, so the signal-to-mask ratio (against the 4.1 px mask at -->
+<!-- the pulse's timescale; see critAmpPx) goes from about 3 to about  -->
+<!-- 6 and the movement is unmistakable. The amplitude is a            -->
+<!-- PER-TRIAL field now (trialStruct.critAmpPx, which the animation   -->
+<!-- loop reads instead of the global), so this is the only difference -->
+<!-- between the two blocks.                                           -->
+<!--                                                                   -->
+<!-- WHY IT IS WORTH THE TRIALS: "a slightly bigger movement buried in -->
+<!-- random jiggle" is not something instructions can convey. Without  -->
+<!-- a demonstration, early practice trials are spent working out what -->
+<!-- the target event even looks like, which is a slow and discouraging -->
+<!-- way to learn it and pushes the real learning into the main task.  -->
+<!-- Performance here is near ceiling by construction and measures     -->
+<!-- nothing; the block is instructional and should be dropped from    -->
+<!-- analysis (filter phase == 0).                                     -->
+<!--                                                                   -->
+<!-- WHY NOT LARGER: at 25 px the displacement is 9% of stimSize, so   -->
+<!-- the objects still overlap ~91%, and being an out-and-back pulse   -->
+<!-- they never come to rest apart. Much larger and the block would    -->
+<!-- teach a location-based strategy -- "watch for the thing that      -->
+<!-- separates" -- which does not work in the real task and would make -->
+<!-- the transition worse, not better. The hard ceiling set by the    -->
+<!-- white backdrop is (overlaySize - stimSize)/2 - jiggleMaxPx = 36   -->
+<!-- px; LayoutOverlay checks it.                                      -->
+<!--                                                                   -->
+<!-- Familiarization uses the 0.2 / 0.2 / 0.6 mix, under               -->
+<!-- which every category is the target and the distractor equally     -->
+<!-- often, so it introduces no contingency. Practice already uses the -->
+<!-- training mix (see the probabilities under OPTIONS).               -->
+<!--                                                                   -->
+<!-- NEW IN V11: the OBJECT-CUED BLOCK (V9, phase 3) is REMOVED and      -->
+<!-- replaced by a final TESTING BLOCK (phase 3).                      -->
+<!--                                                                   -->
+<!-- Testing is the training task again, unchanged: same axis-arrow    -->
+<!-- cue, same 2AFC response, same appearances, same timing, same      -->
+<!-- feedback. The ONLY change is the trial-type mix (see below).      -->
+<!-- Participants are NOT told that the mix changes, and there is no   -->
+<!-- section break: phase 3 starts with the ordinary block-break       -->
+<!-- screen, numbered as the next block (e.g. Block 3 of 8). The       -->
+<!-- testing blocks are logged as phase == 3.                          -->
+<!--                                                                   -->
+<!-- NEW IN THIS VERSION: TARGET LEARNING. The probabilities are       -->
+<!-- flipped, so the rich category is now the FREQUENT TARGET rather   -->
+<!-- than the frequent distractor. Trial-type LABELS are unchanged     -->
+<!-- from the distractor version, so read them by the rich category's  -->
+<!-- role:                                                             -->
+<!--                                                                   -->
+<!--     valid   = rich category present, as the DISTRACTOR            -->
+<!--     invalid = rich category present, as the TARGET                -->
+<!--     neutral = rich category absent                                -->
+<!--                                                                   -->
+<!--                      valid   invalid   neutral                    -->
+<!--   familiarization     0.2     0.2       0.6                       -->
+<!--   practice            0.2     0.6       0.2                       -->
+<!--   training            0.2     0.6       0.2                       -->
+<!--   testing, old        0.2     0.6       0.2                       -->
+<!--   testing, new        0.2     0.2       0.6                       -->
+<!--                                                                   -->
+<!-- So in practice and training the rich category is the target on    -->
+<!-- 0.6 of trials and each sparse category on 0.1, while EVERY         -->
+<!-- category, rich or sparse, is the distractor on 0.2. This is the    -->
+<!-- mirror image of the distractor version, which equated target      -->
+<!-- frequency (0.2 each) and manipulated distractor frequency. Overall -->
+<!-- presence is the same in both versions: rich category on 0.8 of    -->
+<!-- trials, each sparse category on 0.3. In testing, old-exemplar    -->
+<!-- trials keep the training mix and new-exemplar trials use the      -->
+<!-- 0.2 / 0.2 / 0.6 mix (see OLD / NEW EXEMPLARS below). At 60 trials  -->
+<!-- per block the training counts are 12 / 36 / 12, so each cell      -->
+<!-- stays balanced over axis x direction and over the sparse          -->
+<!-- categories within every block.                                    -->
+<!--                                                                   -->
+<!-- OLD / NEW EXEMPLARS. Familiarization, practice and training use  -->
+<!-- 2 appearances per category (the OLD exemplars). Testing adds 2    -->
+<!-- more per category (the NEW exemplars), unseen until then. Two     -->
+<!-- thirds of each testing block are old trials and one third new,    -->
+<!-- interleaved; on a trial BOTH objects come from the same set. The  -->
+<!-- two sets get different mixes:                                     -->
+<!--                                                                   -->
+<!--                      valid   invalid   neutral                    -->
+<!--   testing, old        0.2     0.6       0.2   (= training)        -->
+<!--   testing, new        0.2     0.2       0.6                       -->
+<!--                                                                   -->
+<!-- At 60 trials per block that is 40 old (8 / 24 / 8) and 20 new     -->
+<!-- (4 / 4 / 12). There are 6 testing blocks (360 trials), so the new -->
+<!-- rich category is the target on 24 trials and the distractor on 24.-->
+<!--                                                                   -->
+<!-- Within every block, each cell is balanced over the 4 axis x       -->
+<!-- direction combos and the sparse categories. The one cell that     -->
+<!-- cannot be balanced inside a block is old neutral over the 12      -->
+<!-- ordered sparse pairs (8 trials): the pairs are ordered in rounds  -->
+<!-- of 4 so each sparse category is still the target twice and the    -->
+<!-- distractor twice per block, and cycling continues across blocks,  -->
+<!-- so every run of 3 testing blocks (180 trials) covers each ordered -->
+<!-- pair exactly twice. Testing therefore splits into two exactly     -->
+<!-- balanced halves (blocks 1-3 and 4-6).                             -->
+<!-- Logged per trial as exemplarSet ('old' / 'new').                  -->
+<!--                                                                   -->
+<!-- NOISE BACKDROP. #overlayWrap (the overlaySize box the multiply   -->
+<!-- blend composites against) shows a static phase-scrambled noise    -->
+<!-- image instead of plain white, in every phase and throughout each  -->
+<!-- trial. It is built offline by makeNoiseBackground_online.m from   -->
+<!-- all 25 object images (average amplitude spectrum, random phase,   -->
+<!-- histogram-matched), with a fixed seed, so it is identical for     -->
+<!-- every participant and condition. The white surround of each       -->
+<!-- object is still transparent under multiply.                       -->
+<!--                                                                   -->
+<!-- OBJECT CONTRAST. Objects are drawn at objContrast = 0.6 via layer -->
+<!-- opacity (see objContrast); the noise is built from the objects at -->
+<!-- the same contrast.                                                -->
+<!--                                                                   -->
+<!-- Data fields named 'fd' (fdPresent, fdRole, fdAxis, prevFDPresent, -->
+<!-- prevFDRole) keep their names so the parser does not change; here  -->
+<!-- they refer to the rich (frequent-target) category. fdRole          -->
+<!-- ('target' / 'distractor' / 'absent') is the unambiguous field to   -->
+<!-- analyse by.                                                       -->
+<!--                                                                   -->
+<!-- CARRIED OVER: multiply compositing (both objects contribute       -->
+<!-- symmetrically regardless of layer order), n-1 fields computed at  -->
+<!-- generation time, the survey and save pipeline.                    -->
+<!--                                                                   -->
+<!-- NOT SUITABLE FOR FREQUENCY TAGGING as written: the jiggle is      -->
+<!-- aperiodic by design. For the EEG version, replace the random      -->
+<!-- jiggle with sinusoidal positional oscillation at two distinct     -->
+<!-- frequencies -- periodic motion tagging. That keeps continuous     -->
+<!-- presentation, keeps motion-based segregation, and gives a         -->
+<!-- per-object tagged readout, so behaviour and EEG stay the same     -->
+<!-- task. Check first that the critical displacement is not trivially -->
+<!-- detectable against predictable periodic motion.                   -->
+<!-- ================================================================ -->
+
+<style>
+/* --- overlay stimulus window ------------------------------------- */
+#overlayWindow {
+  position: fixed;
+  top: 50%; left: 50%;
+  width: 600px; height: 600px;
+  margin: -300px 0 0 -300px;
+  background-color: rgb(255,255,255);
+  display: none;
+}
+/* isolate so the multiply blend composites against this box (the noise
+   backdrop, set in LayoutOverlay; white only if it fails to load) and
+   not against the rest of the page. The wrap is deliberately LARGER
+   than the drawn object so that jiggle plus the critical displacement
+   never carries a layer off the white backdrop. */
+#overlayWrap {
+  position: absolute;
+  isolation: isolate;
+  background-color: rgb(255,255,255);
+  overflow: hidden;
+}
+/* Multiply rather than stacked alpha. Multiply is commutative, so the
+   two objects contribute symmetrically no matter which is drawn on
+   top. Stacked alpha weights the top layer more heavily, and since
+   layer order has to be randomised that asymmetry would land straight
+   in the RT measure. Both layers are now fully opaque and on screen
+   for the entire trial, so this matters MORE than it did in the
+   flicker versions, not less. */
+.overlayItem {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  mix-blend-mode: multiply;
+  will-change: transform;
+}
+
+#overlayFix {
+  position: absolute; z-index: 50;
+  font-family: Arial, Helvetica; font-size: 28px; color: rgb(0,0,0);
+  text-align: center;
+}
+#overlayCue {
+  position: absolute; width: 600px; top: 250px; left: 0; z-index: 60;
+  text-align: center; font-family: Arial, Helvetica; font-size: 64px;
+  color: rgb(0,0,0); display: none;
+}
+#overlayReminder {
+  position: absolute; width: 600px; top: 505px; left: 0;
+  text-align: center; font-family: Arial, Helvetica; font-size: 15px;
+  color: rgb(90,90,90);
+}
+#overlayFeedback {
+  position: absolute; width: 600px; height: 600px; top: 0; left: 0;
+  background-color: rgb(255,255,255); z-index: 100;
+  display: none; padding-top: 230px; box-sizing: border-box;
+  text-align: center; font-family: Arial, Helvetica; font-size: 18px;
+}
+</style>
+
+<!-- ================================================================ -->
+<div id="instructionsPractice"> <p><b>Welcome!</b> </p>
+
+<p>In this experiment you will see <b>two objects overlaid on top of each
+other</b> in the centre of the screen. Both stay on screen for the whole trial,
+and both <b>jiggle constantly</b>, wobbling in small random directions.</p>
+
+<p>At one moment, <b>one of the two objects makes a slightly bigger
+movement</b>: it drifts in one direction and then comes back. Your job is to
+report the direction of that movement with the arrow keys.</p>
+
+<p>Before each trial, an arrow tells you <b>which axis</b> the movement will be
+along. The cued axis changes from trial to trial, so always check the arrow:</p>
+
+<p style='text-align: center; font-size: 22px'>
+&#8596; &nbsp;=&nbsp; press <b>LEFT or RIGHT</b><br><br>
+&#8597; &nbsp;=&nbsp; press <b>UP or DOWN</b>
+</p>
+
+<p><b>This is a challenging task.</b> The bigger movement is only slightly
+larger than the constant jiggle, so it does not jump out at you. If you truly
+did not see it, take a guess.</p>
+
+<p>You will start with <b>20 easy trials</b> for you to get familiar with the task. Then,
+  you will do <b>30 practice trials</b> that is the same as the main task. After that, you will do <b>8 blocks</b> of the main task.
+  Each block contains <b>60 trials</b>, and you will be given feedback on your performance after each block. Please try your 
+  best to keep your responses <b>fast</b> and <b>accurate</b>.
+  You can take short breaks between blocks, and the whole experiment will take about 60 minutes to complete.
+</p>
+
+  <p style='text-align: center'><a onclick='instructions2()'
+  id='nextInstructionsButton' class='startExperimentButton'>Click Here to Continue
+  </a><span id="loading">Images still loading. Please wait. &nbsp;
+  &nbsp; <img src="Images/spinner.gif" style="width: 30px; height:
+  30px"></span></p> </div>
+
+<div id="instructionsPractice2"> <p>Before you begin, please take a look at the
+   following examples of the objects you might see.</p>
+<div id="searchInstructions1"></div>
+<div id="searchInstructions2"></div>
+<div id="searchInstructions3"></div>
+<div id="searchInstructions4"></div>
+<div id="searchInstructions5"></div>
+<br><br><br><br><br><br>
+
+<p style='text-align: center'><a onclick='instructions3()'
+id='nextInstructionsButton' class='startExperimentButton'>Next Page</a></p> </div>
+
+<div id="instructionsPractice3">
+
+<p id="taskRule">On each trial, two of these objects will be superimposed in the
+centre of the screen, both jiggling. Part-way through, one of them will drift
+in a one direction (either horizontal or vertical) and come back. The arrow cue at the start of the trial
+tells you which axis that drift will be along.</p>
+
+<p><b>Wait for the objects to disappear before you answer.</b> Key presses
+while the objects are still on screen do nothing. When the objects go off, the
+central '+' turns into a '?' — that is your signal to press. Decide while you
+are watching, then respond when the '?' appears.</p>
+
+<p><b>Note</b>: Please keep your eyes on
+the central fixation cross ('+') throughout each trial.</p>
+
+<p>The cued axis changes from trial to trial, so always pay attention to the arrow.</p>
+
+<p>After each trial you will be told how long you took and whether you were
+correct. Please do your best to keep your responses fast and accurate.</p>
+
+<p><b>We will start with a few easy trials</b>, where the bigger movement is
+made much larger than it will be in the real task, so you can see clearly what
+you are looking for.</p>
+
+<p>There is a familiarization phase, a practice phase, and then the main task. There 
+  are eight blocks in the main task, and you can take a short break between each block. 
+  The whole experiment will take about 60 minutes to complete.
+</p>
+
+<p style='text-align: center'><a href='javascript:StartExperiment()'
+id='startExperimentButton' class='startExperimentButton'>Start
+Easy Trials</a></p> </div>
+
+<div id="instructionsPracticeStart">
+<p><b>That is the movement you are looking for.</b></p>
+
+<p>From here on it will be <b>much smaller</b> — only slightly larger than the
+constant jiggle, so it will not jump out at you. The task is the same in every
+other way: watch for the bigger movement on the cued axis and report its
+direction.</p>
+
+<p>Keep watching, make your best judgement, and if you truly did not see it,
+guess. Some practice trials next.</p>
+
+<p style='text-align: center'><a href='javascript:StartPracticeTask()'
+id='startExperimentButton4' class='startExperimentButton'>Start
+Practice</a></p>
+</div>
+
+<div id="instructionsMain"> <br><br><br><br> <center>Get ready for the main
+experiment!</center> <br><br><br> <center style='text-align: center'><a
+href='javascript:StartMainTask()'  id='startExperimentButton2'
+class='startExperimentButton'>Start Main Task</a></center> </div>
+
+<!-- ================================================================ -->
+
+<script>
+
+$('#instructionsPractice2').hide();
+$('#instructionsPractice3').hide();
+$('#instructionsPracticeStart').hide();
+$('#instructionsMain').hide();
+$('#done').hide();
+
+/* ================================================================== */
+/* OPTIONS                                                            */
+/* ================================================================== */
+
+var nObjectsTraining = 2; // OLD appearances per category, used in every
+                          // phase (familiarization through testing)
+var nObjectsNew = 2;      // NEW appearances per category, testing only
+
+/* WHICH APPEARANCE SET THE TASK USES, AND WHICH CATEGORY IS RICH.
+   Both are ASSIGNED BY THE SERVER on page load (see COUNTERBALANCING
+   below); the values here are only placeholders until that returns.
+
+   mainSetLetter: with nObjectsTraining = 1 the whole session uses
+   obj1<letter> ... obj5<letter>; if nObjectsTraining > 1 it takes that
+   many consecutive letters starting here, wrapping round to 'a' once
+   it runs off the end of the nObjects available. The letter in force
+   is written into expVersion and logged. */
+var mainSetLetter = 'a';
+var richCategoryID = 0; // which category is the frequent TARGET (0-4)
+
+imageCategories = ["Animals", "Fruits or Vegetables", "Musical Instruments", "Sports Equipment", "Tools"];
+var richCategoryName = imageCategories[richCategoryID];
+var trainingNumberStr = nObjectsTraining.toString();
+var expVersion = richCategoryName + trainingNumberStr + mainSetLetter;
+
+/* A wide range, so two participants are very unlikely to share an id:
+   assign_DL_YF.php counts each saved id once, so a collision within a
+   condition would undercount that condition. */
+var randID = Math.floor(Math.random() * 100000000);
+var baseID = "YF" + "_" + randID;
+var curID  = baseID;   // becomes baseID + '_c' + cond once a condition is assigned
+var nCategories = 5;  // number of object categories
+var nObjects = 5;     // total appearances available per category (obj1a ... obj1e).
+                      // Must be at least nObjectsTraining. Checked at startup.
+
+/* --- COUNTERBALANCING (server-assigned) --------------------------- */
+/* On page load the page asks assign_DL_YF.php for a condition number
+   0 .. nAssignConds-1 and unpacks it:
+
+     r = Math.floor(cond / nCategories)        // which block of 5
+     k = cond % nCategories
+     richCategoryID = k
+     mainSetLetter  = alphabet[(k + r) % nObjects]
+
+   With 5 categories x 5 appearance sets that is 25 conditions, every
+   (rich category, set) pair exactly once. They are ordered in 5
+   blocks of 5, and each block is a row of a Latin square: within a
+   block every category is rich once AND every set is used once.
+
+   GITHUB/DATAPIPE VERSION: conditions now come from DataPipe's
+   condition assignment (set to 25 conditions on the dashboard). It
+   hands out 0, 1, 2, ... 24, 0, 1, ... in order, so consecutive runs
+   of 5 starts are Latin-square blocks. Unlike assign_DL_YF.php it
+   counts STARTS, not completions, and cannot release a condition when
+   someone quits, so dropouts and reloads unbalance the cells. Check
+   the counts of assignedCond in the saved files and top up as needed.
+
+   The data are saved as curID = baseID + '_c' + cond, as before.
+
+   If the server cannot be reached, a condition is drawn at random and
+   assignSource is logged as 'fallback'. That session still saves with
+   its _c suffix, so the server counts it like any other. */
+var experimenter   = 'YF';
+var experimentName = 'TL_Exp2';   // CHANGE THIS for each new version
+/* DataPipe (pipe.jspsych.org) replaces the Dartmouth server for both
+   condition assignment and saving; data files go to Google Drive.
+   Paste the 12-character experiment ID from the DataPipe dashboard. */
+var DATAPIPE_EXPERIMENT_ID = "fM0eYJp8fzbC";
+var REFILL_CONDS = [0, 4, 5, 8, 11, 13, 14, 16, 17, 18, 19, 20, 22, 23, 24];
+var assignURL = "https://pipe.jspsych.org/api/condition/";
+var saveURL   = "https://pipe.jspsych.org/api/data/";
+var nAssignConds = nCategories * nObjects;
+var assignedCond = null;
+var assignSource = null;   // 'server' or 'fallback'
+var dataSaved = false;     // true once DataPipe has confirmed the save
+
+var imDir = 'Objects_matched/';   // image directory
+var imExt = '.png';
+
+/* Trial type probabilities per phase
+   [familiarization, practice, training, testing]. The labels are kept
+   from the distractor version, so in THIS version:
+     valid   = rich category present, as the distractor (does not move)
+     invalid = rich category present, as the target (the moving object)
+     neutral = rich category absent (two sparse categories)
+
+   Practice and training: the rich category is the target on 0.6 of
+   trials (each sparse category on 0.1), and every category is the
+   distractor on 0.2. Note that practice already carries the
+   contingency, so learning effectively starts there: 30 practice + 240
+   training trials.
+
+   Familiarization uses the new-exemplar testing mix, under which all five
+   categories are the target and the distractor equally often, so it
+   shows every object (rich included) without introducing any
+   contingency.
+
+   TESTING (phase 3) splits by exemplar set. OLD-exemplar trials keep
+   the training mix (the testing entry below). NEW-exemplar trials use
+   newProb: 0.2 valid / 0.2 invalid / 0.6 neutral, under which every
+   category is the target and the distractor equally often.
+   testNewFrac (1/3) of each testing block is new trials. Everything else --
+   the arrow cue, the response set, the timing -- is identical to
+   training. */
+var validProb   = [0.2, 0.2, 0.2, 0.2];
+var invalidProb = [0.2, 0.6, 0.6, 0.6];
+var neutralProb = [0.6, 0.2, 0.2, 0.2];
+var newProb     = {valid: 0.2, invalid: 0.2, neutral: 0.6};
+var testNewFrac = 1/3;
+
+/* Phase indices, used instead of bare numbers wherever the phase
+   matters. PHASE_FAMILIAR is the easy demonstration block that opens
+   the session; PHASE_TEST is the testing block at the end. */
+var PHASE_FAMILIAR = 0, PHASE_PRACTICE = 1, PHASE_TRAIN = 2, PHASE_TEST = 3;
+
+/* --- overlay display --------------------------------------------- */
+var stimSize      = 280;          // px; box each object is drawn into
+var objContrast   = 0.6;          // object contrast, applied as opacity.
+                                  // Under multiply, opacity k gives
+                                  // backdrop * (1 - k*(1 - object)): contrast
+                                  // scales toward white, the white surround
+                                  // stays transparent, and the two layers stay
+                                  // symmetric. Keep equal to objContrast in
+                                  // makeNoiseBackground_online.m.
+var noiseIm       = 'noise_bg';   // static noise backdrop in imDir, made by
+                                  // makeNoiseBackground_online.m (built at
+                                  // 2x, drawn at overlaySize CSS px)
+var overlaySize   = 380;          // px; noise backdrop the layers move
+                                  // inside. Checked against the maximum
+                                  // possible excursion at startup.
+var grayscaleStim = 1;            // 1 = greyscale both objects (recommended).
+                                  // If the multiply blend looks wrong in your
+                                  // browser, pre-greyscale the PNGs offline and
+                                  // set this to 0: a CSS filter on a blended
+                                  // element is handled inconsistently.
+
+/* --- jiggle: bounded Brownian motion ------------------------------ */
+/* Each object drifts continuouslys. The process is
+   Ornstein-Uhlenbeck -- Brownian motion with a spring pulling it back
+   to home -- run independently on x and y for each object:
+
+     j <- a*j + sd*sqrt(1 - a^2) * N(0,1),   a = exp(-dt / jiggleTauMs)
+
+  */
+var jiggleSdPx  = 4;              // stationary sd per axis
+var jiggleTauMs = 200;            // correlation time of the drift
+var jiggleMaxPx = 14;             // radial clamp (3.5 sd)
+
+/* --- critical displacement ---------------------------------------- */
+/* A smooth raised-cosine pulse added to the jiggle: 0 -> critAmpPx ->
+   0 over critDurMs, with zero velocity at both ends, so there is no
+   transient to detect. ONLY THE TARGET gets one; the other object
+   keeps jiggling and nothing else.
+
+   TITRATE THIS AGAINST THE MASK AT THE PULSE'S TIMESCALE, not against
+   the jiggle's stationary amplitude. The quantity to compare with is
+   jiggleSdPx * sqrt(2*(1 - exp(-150/jiggleTauMs))), the sd of the
+   jiggle's net displacement over the pulse's rising half -- 4.11 px at
+   the current settings. The pulse contributes critAmpPx of directed
+   displacement over the same window, so the current 12-14 px puts the
+   ratio at 2.9-3.4. Aim for 75-80% correct: off the floor, with room
+   for the rich-category effect to move.
+
+   THE PULSE IS NOT RELIABLY THE LARGEST MOVEMENT. Peak pulse velocity
+   is critAmpPx*pi/critDurMs, about 2.1-2.4 px per frame at 60 Hz at
+   the current 12-14 px; the jiggle's per-frame step sd is about 1.6
+   px per axis, so single jiggle steps still exceed the pulse's peak
+   on roughly 12-18% of frames. Forcing the pulse to dominate on
+   velocity or on excursion means shrinking the mask until the task is
+   trivial. What the pulse IS, always and by
+   construction, is the only motion with a non-zero mean: the jiggle's
+   expected net displacement over any window is exactly zero. The
+   instructions describe it that way -- the movement that goes
+   somewhere, not the biggest movement.
+
+   Keep critAmpPx small relative to stimSize. At 14 px on a 280 px
+   object the displacement is 5% of object size, so the two objects
+   stay almost entirely superimposed. Pushing it much higher starts to
+   pull them apart and lets selection become location-based. */
+/* Peak displacement, drawn UNIFORMLY per trial from
+   [critAmpMinPx, critAmpMaxPx] rather than fixed. Jittering amplitude
+   spreads difficulty within a participant instead of betting the whole
+   experiment on one guessed value: if 12 px is near floor and 14 near
+   ceiling you still have usable trials at both ends, and the per-trial
+   value is logged so amplitude can serve as a covariate or a
+   within-subject difficulty factor.
+
+   Drawn independently per trial, not balanced across conditions. Over
+   a 2 px range the sd is 2/sqrt(12) = 0.58 px, so with 144 invalid and
+   48 valid training trials the two cell means differ by roughly 0.1 px
+   (sd of the difference) -- far below anything that matters. If you
+   want it exact, stratify the draw within trialType. */
+var critAmpMinPx = 12;
+var critAmpMaxPx = 14;
+var critDurMs = 300;              // out-and-back duration
+
+/* FAMILIARIZATION amplitude. The point of the opening block is to show
+   participants what the critical movement looks like, so here the
+   signal-to-mask ratio is deliberately blown out: 25/4.1 = 6.1 rather
+   than the main task's 2.9-3.4. Performance in this block should be
+   near ceiling and
+   is not a measure of anything -- it exists so that "a slightly bigger
+   movement" means something concrete before the real task starts.
+
+   At 25 px the displacement is 8.9% of stimSize, so the objects still
+   overlap ~91% and, being an out-and-back pulse, never come to rest
+   apart. Pushed much higher this block would start teaching a
+   location-based strategy that does not work in the real task. */
+var famCritAmpPx = 25;
+
+/* --- timing (ms) -------------------------------------------------- */
+var cueDurMs      = 500;          // axis pre-cue at fixation (all phases)
+var cueGapMs      = 200;          // cue off, fixation alone, then objects
+var stimDurMs     = 1500;         // fixed; carries no information
+var minPreCritMs  = 500;          // baseline jiggle before the displacement
+var minPostCritMs = 200;          // jiggle after the pulse ends. Its only
+                                  // remaining job is to guarantee the pulse
+                                  // completes on screen: stimDurMs is fixed,
+                                  // so stimulus offset is at the same time on
+                                  // every trial and cannot mark the critical
+                                  // event regardless of this value.
+/* DELAYED RESPONSE. The keyboard is dead until the objects go off, and
+   the window then runs respWindowMs from STIMULUS OFFSET. Presses
+   during the stimulus are counted in nEarlyPresses and ignored.
+
+   Why: previously a response ended the stimulus early, so how long a
+   participant looked at the two objects depended on how fast they
+   answered. Viewing time was therefore shorter on exactly the trials
+   where responding was easy -- and since ease differs by trial type,
+   cumulative exposure to the rich category was entangled with the
+   rich-category effect itself. Holding the display to a fixed stimDurMs on every trial
+   removes that, and also takes speed pressure off the encoding
+   period: nothing is gained by answering while the objects are still
+   up.
+
+   WHAT IT COSTS. RT is no longer a detection latency. The pulse ends
+   somewhere between 500 and 1300 ms before offset, so participants
+   hold a decided answer for a variable dead interval and RT mostly
+   indexes readiness to execute a prepared response. Any rich-category
+   effect in RT will be attenuated relative to the axis-cued design, and
+   accuracy carries correspondingly more of the weight. critOnsetMs is
+   logged, so the pulse-to-offset interval is available as a covariate.
+
+   minRespTime is gone: it existed to screen reflexive presses within
+   150 ms of the pulse, and the pre-offset gate now subsumes that,
+   since the pulse always ends at least minPostCritMs before the window
+   opens. e.repeat still guards against a held key. */
+var respWindowMs  = 3000;         // from STIMULUS OFFSET
+var itiMin        = 1000;
+var itiMax        = 1400;
+
+var critWindowMinMs = minPreCritMs;
+var critWindowMaxMs = stimDurMs - critDurMs - minPostCritMs;
+
+/* NOTE on what RT measures. rt is timed from STIMULUS OFFSET, which
+   is a fixed point on every trial, so it is not contaminated by when
+   the pulse happened -- but for the same reason it is not a detection
+   latency either (see the delayed-response note above).
+   rtFromCritOnset re-references to the pulse onset and is the closer
+   analogue of RT in the axis-cued versions, though it is dominated by
+   the fixed pulse-to-offset interval.
+
+   Evidence is still a PULSE rather than sustained, so accuracy is the
+   primary measure and a constant-drift DDM is not the right
+   generative model; pulsed drift or a signal-detection treatment of
+   accuracy is. This is unchanged from the transient-tilt version.
+
+   AXIS ERRORS are the informative new measure. A response on the
+   uncued axis means the participant read out the wrong object, so
+   axisError rate is a fairly direct index of misallocated selection
+   and is worth analysing by trial type in its own right, not just
+   discarding. */
+
+/* --- response ----------------------------------------------------- */
+var keyLeft  = 37, keyUp = 38, keyRight = 39, keyDown = 40;
+var respKeys = [keyLeft, keyUp, keyRight, keyDown];
+var keyToDir = {37: 'left', 38: 'up', 39: 'right', 40: 'down'};
+var dirToAxis = {left: 'horizontal', right: 'horizontal',
+                 up: 'vertical',     down: 'vertical'};
+var startTrialKey = [32];         // space; used only on the block-break screen
+
+/* --- feedback ----------------------------------------------------- */
+var feedbackInMain = 1;
+
+/* Feedback clears itself on a timer -- no keypress. Errors, misses and
+   axis errors get a longer screen than correct trials, because they
+   carry more to read and are the ones worth registering.
+
+   THE ITI ABSORBS THE DIFFERENCE. Total post-response time is held at
+   feedbackDurMs + iti on every trial: on a long-feedback trial the
+   drawn ITI is reduced by the extra feedback time (floored at
+   itiFloorMs). Without this, the interval before trial n+1 would
+   depend on accuracy on trial n -- and since accuracy differs by trial
+   type, that puts a systematic timing difference straight into the n-1
+   analyses the rich-category effect relies on. Participants see the error message
+   for longer; the clock does not notice.
+
+   Trials now start automatically (no spacebar), so the
+   response-to-stimulus interval is fixed by feedback + ITI alone. */
+var feedbackDurMs      = 800;     // correct
+var feedbackErrorDurMs = 1500;    // incorrect, miss, axis error
+var itiFloorMs         = 300;     // ITI never compressed below this.
+                                  // The extra feedback time must fit inside
+                                  // itiMin - itiFloorMs or the compensation
+                                  // clips on short ITI draws and the totals
+                                  // stop matching. Checked at startup.
+
+var debug = 1;
+if (debug == 1) {
+  var nTrialsPerBlock = [1, 1, 1, 1];
+  var nBlocks = [1, 1, 1, 1];
+}
+else {
+  var nTrialsPerBlock = [20, 30, 60, 60];
+  var nBlocks = [1, 1, 2, 6]; 
+}
+
+bgColor = 'rgb(255, 255, 255)';
+var maxTime = 3.0;
+
+var startExperimentTime = new Date();
+
+var familiarTrials = [];
+var practiceTrials = [];
+var trainingTrials = [];
+var testTrials      = [];
+var totalTrials = [];
+var expParams = [];
+var surveyResponses = [];
+
+var currentTab = 0;
+
+var alphabet = ['a','b','c','d','e'];   // needs at least nObjects letters
+var itemImsList = new Array(nCategories).fill(null).map(() => (Array(nObjects)));
+var trainingItems = [];   // OLD appearances, used in every phase
+var trainingItemSets = [];
+var trainingLetters  = [];
+var newItems = [];        // NEW appearances, testing only
+var newItemSets = [];
+var newLetters  = [];
+
+for (var i = 0; i < nCategories; i++) {
+  for (var j = 0; j < nObjects; j++) {
+    itemImsList[i][j] = 'obj' + (i+1).toString() + alphabet[j];
+  }
+}
+
+/* Pointers for where we are in the experiment: */
+var currentTrial = -1;
+var currentPhase = 0;
+var currentBlock = 0;
+var currentPhaseBlock = 0;
+
+var trialStruct = null;
+var trialStructB = null;
+var deadlineTimer = null;
+var pendingTimers = [];
+
+/* motion engine state */
+var rafID = null;
+var stimOnsetTime = null;
+var layers = null;
+var critStarted = false;
+var critStartTime = null;
+var lastFrameTime = null;    // for the dt-based OU update
+var respOpen = false;        // true from stimulus offset onward
+var respOpenTime = null;     // rt is timed from here
+
+/* ================================================================== */
+/* LAYOUT                                                             */
+/* ================================================================== */
+
+function LayoutOverlay() {
+  var win = 600;
+  var wrapOff = (win - overlaySize) / 2;
+  var itemOff = (overlaySize - stimSize) / 2;
+
+  $('#overlayWrap').css({
+    'left': wrapOff + 'px', 'top': wrapOff + 'px',
+    'width': overlaySize + 'px', 'height': overlaySize + 'px',
+    'background-image': 'url(' + imDir + noiseIm + imExt + ')',
+    'background-size': overlaySize + 'px ' + overlaySize + 'px'
+  });
+
+  $('.overlayItem').css({
+    'left': itemOff + 'px', 'top': itemOff + 'px',
+    'width': stimSize + 'px', 'height': stimSize + 'px',
+    'opacity': objContrast
+  });
+
+  if (grayscaleStim) { $('.overlayItem').css('filter', 'grayscale(1)'); }
+
+  $('#overlayFix').css({
+    'left': (win/2 - 10) + 'px', 'top': (win/2 - 18) + 'px', 'width': '20px'
+  });
+
+  // the layer has (overlaySize - stimSize)/2 px of slack on each side.
+  // Check against the LARGEST amplitude used anywhere, which is the
+  // familiarization one, not the main-task one.
+  // the extra error-feedback time has to fit inside the ITI's headroom,
+  // otherwise the compensation clips and feedback + ITI is no longer
+  // constant across correct and error trials
+  if ((feedbackErrorDurMs - feedbackDurMs) > (itiMin - itiFloorMs)) {
+    console.error('Error feedback is ' + (feedbackErrorDurMs - feedbackDurMs) +
+                  ' ms longer than correct feedback, but the ITI only has ' +
+                  (itiMin - itiFloorMs) + ' ms of headroom. Feedback + ITI ' +
+                  'will not be constant across outcomes. Lower ' +
+                  'feedbackErrorDurMs or raise itiMin.');
+  }
+
+  var startIdx = alphabet.indexOf(mainSetLetter);
+  if (startIdx < 0 || startIdx >= nObjects) {
+    console.error("mainSetLetter is '" + mainSetLetter + "', which is not one " +
+                  'of the first ' + nObjects + ' letters (nObjects). Use one ' +
+                  'of: ' + alphabet.slice(0, nObjects).join(', ') + '.');
+  }
+
+  if (nObjects < nObjectsTraining + nObjectsNew) {
+    console.error('Need at least ' + (nObjectsTraining + nObjectsNew) +
+                  ' appearances per category (nObjectsTraining + ' +
+                  'nObjectsNew) but nObjects is ' + nObjects + '.');
+  }
+
+  var maxExcursion = jiggleMaxPx + Math.max(critAmpMaxPx, famCritAmpPx);
+  if (maxExcursion > itemOff) {
+    console.error('An object can travel ' + maxExcursion + ' px but only has ' +
+                  itemOff + ' px of slack inside the backdrop. Raise ' +
+                  'overlaySize or lower jiggleMaxPx / critAmpMaxPx / famCritAmpPx.');
+  }
+  if (critWindowMaxMs <= critWindowMinMs) {
+    console.error('No displacement window: stimDurMs (' + stimDurMs +
+                  ') is too short for minPreCritMs + critDurMs + ' +
+                  'minPostCritMs = ' +
+                  (minPreCritMs + critDurMs + minPostCritMs) + ' ms.');
+  }
+}
+
+/* ================================================================== */
+/* STIMULUS SELECTION                                                  */
+/* ================================================================== */
+
+function GenerateObjects() {
+
+  /* Walk the appearance letters in order from mainSetLetter, wrapping
+     at nObjects; the first nObjectsTraining are the OLD set, used in
+     EVERY phase, and the next nObjectsNew are the NEW set, used only in
+     testing.
+
+     The SAME letter is used for all five categories within a phase
+     (obj1a...obj5a, not a different letter per category). This is
+     deliberate: the appearance sets were built to be matched
+     column-wise, so mixing letters across categories would break that
+     matching. */
+  var startIdx = alphabet.indexOf(mainSetLetter);
+  var trainIdx = [];
+  for (var k = 0; k < nObjectsTraining; k++) {
+    trainIdx.push((startIdx + k) % nObjects);
+  }
+
+  var newIdx = [];
+  for (var k = 0; k < nObjectsNew; k++) {
+    newIdx.push((startIdx + nObjectsTraining + k) % nObjects);
+  }
+
+  trainingItems = itemImsList.map(row => trainIdx.map(x => row[x]));
+  trainingItemSets = trainIdx;
+  trainingLetters  = trainIdx.map(x => alphabet[x]);
+  newItems    = itemImsList.map(row => newIdx.map(x => row[x]));
+  newItemSets = newIdx;
+  newLetters  = newIdx.map(x => alphabet[x]);
+
+  // Images are otherwise fetched on first use, and the new set is first
+  // used in the middle of a testing trial; preload everything here.
+  trainingItems.concat(newItems).flat().forEach(function(im) {
+    new Image().src = imDir + im + imExt;
+  });
+  var noiseImg = new Image();
+  noiseImg.onerror = function() {
+    console.error('Noise backdrop ' + imDir + noiseIm + imExt + ' failed to ' +
+                  'load; the backdrop is plain white.');
+  };
+  noiseImg.src = imDir + noiseIm + imExt;
+
+  expParams.push({
+    expVersion,
+    assignedCond,
+    assignSource,
+    nAssignConds,
+    richCategoryID,
+    richCategoryName,
+    nObjectsTraining,
+    nObjects,
+    mainSetLetter,
+    trainingItemSets,
+    trainingLetters,
+    nObjectsNew,
+    newItemSets,
+    newLetters,
+    stimSize,
+    objContrast,
+    overlaySize,
+    noiseIm,
+    grayscaleStim,
+    jiggleSdPx,
+    jiggleTauMs,
+    jiggleMaxPx,
+    critAmpMinPx,
+    critAmpMaxPx,
+    famCritAmpPx,
+    critDurMs,
+    cueDurMs,
+    cueGapMs,
+    stimDurMs,
+    minPreCritMs,
+    minPostCritMs,
+    critWindowMinMs,
+    critWindowMaxMs,
+    respWindowMs,
+    feedbackDurMs,
+    feedbackErrorDurMs,
+    itiFloorMs,
+    itiMin,
+    itiMax,
+    maxTime,
+    nTrialsPerBlock,
+    nBlocks,
+    validProb,
+    invalidProb,
+    neutralProb,
+    newProb,
+    testNewFrac,
+    phaseNames: ['familiarization', 'practice', 'training', 'testing'],
+    critAmpPxByPhase: ['fixed ' + famCritAmpPx,
+                       'uniform ' + critAmpMinPx + '-' + critAmpMaxPx,
+                       'uniform ' + critAmpMinPx + '-' + critAmpMaxPx,
+                       'uniform ' + critAmpMinPx + '-' + critAmpMaxPx]
+  });
+}
+
+/* ================================================================== */
+/* TRIAL GENERATION                                                    */
+/* ================================================================== */
+
+function jitter(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+/* Continuous uniform draw. Sub-pixel values are fine here: the jiggle
+   is already continuous and positions are written with toFixed(2), so
+   the browser is subpixel-rendering these translations anyway. */
+function uniformRange(lo, hi) { return lo + Math.random() * (hi - lo); }
+
+/* Spread a set of levels as evenly as possible over n trials, then
+   shuffle. Used for the attended-axis x target-direction factorial.
+
+   Doing this rather than flipping coins matters at these cell sizes:
+   12 valid trials per block left to chance could easily come out
+   9 horizontal / 3 vertical, and any residual axis or direction bias
+   would then load directly onto the condition of interest. */
+function balancedLevels(n, levels, offset) {
+  var out = [];
+  for (var i = 0; i < n; i++) { out.push(levels[(i + offset) % levels.length]); }
+  return Shuffle(out);
+}
+
+/* Exact per-block counts of valid / invalid / neutral for a mix
+   [pValid, pInvalid, pNeutral]. Floor each expected count, then hand
+   the leftover trials to whichever cells were rounded down hardest, so
+   the three always sum to n. */
+function condCounts(n, probs) {
+  var raw  = [n * probs[0], n * probs[1], n * probs[2]];
+  var out  = raw.map(Math.floor);
+  var rem  = n - (out[0] + out[1] + out[2]);
+  var order = [0, 1, 2].sort(function(a, b) {
+    return (raw[b] - out[b]) - (raw[a] - out[a]);
+  });
+  for (var i = 0; i < rem; i++) { out[order[i % 3]]++; }
+  return {nValid: out[0], nInvalid: out[1], nNeutral: out[2]};
+}
+
+/* The four attended-axis x target-direction combinations, so that
+   both are balanced jointly rather than one within the other. */
+var AXIS_DIR_COMBOS = [
+  {axis: 'horizontal', dir: 'left'},
+  {axis: 'horizontal', dir: 'right'},
+  {axis: 'vertical',   dir: 'up'},
+  {axis: 'vertical',   dir: 'down'}
+];
+
+function GenerateTrials() {
+  LayoutOverlay();
+  totalBlock = -1;
+
+  document.getElementById("ImgAnswerText").innerHTML = richCategoryName;
+  ["ImgAnswerText2", "ImgAnswerText2b"].forEach(function(id) {
+    if (document.getElementById(id)) {
+      document.getElementById(id).innerHTML = richCategoryName;
+    }
+  });
+
+  var sparseCategoryIDs = Array.from({length: nCategories}, (_, index) => index);
+  sparseCategoryIDs.splice(richCategoryID, 1);
+
+  // all ordered (target, distractor) pairs of sparse categories, for
+  // neutral trials, in rounds of 4: round d pairs each sparse category
+  // with the one d places after it. Every round has each sparse
+  // category once as target and once as distractor, so any run of
+  // whole rounds is balanced on both even when it is not a multiple
+  // of all 12 pairs (old-neutral testing: 8 per block, 32 per phase).
+  var nSparse = sparseCategoryIDs.length;
+  var neutralCondBase = [];
+  for (var d = 1; d < nSparse; d++) {
+    for (var si = 0; si < nSparse; si++) {
+      neutralCondBase.push({
+        targetCatID: sparseCategoryIDs[si],
+        distractorCatID: sparseCategoryIDs[(si + d) % nSparse]
+      });
+    }
+  }
+
+  for (var p = 0; p < validProb.length; p++) {      // for each phase
+    for (var b = 0; b < nBlocks[p]; b++) {          // for each block
+      totalBlock++;
+      var tempTrials = [];
+
+      // Every phase has an OLD-exemplar part with the phase's mix;
+      // testing also has a NEW-exemplar part with newProb.
+      var nTr  = nTrialsPerBlock[p];
+      var nNew = (p === PHASE_TEST) ? Math.round(nTr * testNewFrac) : 0;
+      var parts = [{set: 'old', n: nTr - nNew,
+                    probs: [validProb[p], invalidProb[p], neutralProb[p]]}];
+      if (nNew > 0) {
+        parts.push({set: 'new', n: nNew,
+                    probs: [newProb.valid, newProb.invalid, newProb.neutral]});
+      }
+
+      var condList = [];
+
+      // Cycling through categories and axis x direction combos starts
+      // where the previous block of this phase left off (off = b * n,
+      // as n is the same every block), so a cell too small to divide
+      // evenly within a block is still balanced over the phase.
+      function pushCond(n, type, set, catFn) {
+        var off = b * n;
+        // attended axis and target direction, balanced jointly rather
+        // than one nested in the other
+        var combos = balancedLevels(n, AXIS_DIR_COMBOS, off);
+        for (var i = 0; i < n; i++) {
+          var cats = catFn(i + off);
+          condList.push({
+            targetCatID: cats.targetCatID,
+            distractorCatID: cats.distractorCatID,
+            trialType: type,
+            exemplarSet: set,
+            attendAxis: combos[i].axis,
+            targetDir: combos[i].dir
+          });
+        }
+      }
+
+      // Counts derived from the probabilities, remainder to the largest
+      // fractional parts so they always sum to the part's size. At 60
+      // trials: training 12/36/12; testing old 8/24/8, new 4/4/12.
+      parts.forEach(function(part) {
+        var counts = condCounts(part.n, part.probs);
+
+        // VALID: rich category present as the DISTRACTOR; it does not
+        // move.
+        pushCond(counts.nValid, 'valid', part.set, function(i) {
+          return {
+            targetCatID: sparseCategoryIDs[i % sparseCategoryIDs.length],
+            distractorCatID: richCategoryID
+          };
+        });
+
+        // INVALID: rich category is the TARGET and moves on the cued
+        // axis.
+        pushCond(counts.nInvalid, 'invalid', part.set, function(i) {
+          return {
+            targetCatID: richCategoryID,
+            distractorCatID: sparseCategoryIDs[i % sparseCategoryIDs.length]
+          };
+        });
+
+        // NEUTRAL: rich category absent
+        pushCond(counts.nNeutral, 'neutral', part.set, function(i) {
+          var nb = neutralCondBase[i % neutralCondBase.length];
+          return {targetCatID: nb.targetCatID, distractorCatID: nb.distractorCatID};
+        });
+      });
+
+      condList = Shuffle(condList);
+
+      for (var t = 0; t < nTrialsPerBlock[p]; t++) {
+        var cond = condList[t];
+        var targetCatID     = cond.targetCatID;
+        var distractorCatID = cond.distractorCatID;
+        var trialType       = cond.trialType;
+        var exemplarSet     = cond.exemplarSet;
+        var attendAxis      = cond.attendAxis;
+        var targetDir       = cond.targetDir;
+
+        // both objects come from the trial's exemplar set
+        var usedItems = (exemplarSet === 'new') ? newItems : trainingItems;
+
+        // sample an appearance for each object independently
+        var nAvail = usedItems[targetCatID].length;
+        var targetAppIdx     = Math.floor(Math.random() * nAvail);
+        var distractorAppIdx = Math.floor(Math.random() * nAvail);
+        var targetIm     = usedItems[targetCatID][targetAppIdx];
+        var distractorIm = usedItems[distractorCatID][distractorAppIdx];
+
+        // which of the two is drawn on top (logged; symmetric under multiply)
+        var targetOnTop = Math.random() < 0.5 ? 1 : 0;
+
+        // when the displacement starts: continuous, uniform over the
+        // window. No trough-locking needed now that nothing flickers.
+        var critOnsetMs = critWindowMinMs +
+                          Math.random() * (critWindowMaxMs - critWindowMinMs);
+        critOnsetMs = Math.round(critOnsetMs * 1000) / 1000;
+
+        // which absolute axis the rich category moves on. Only the
+        // target displaces, so on valid trials (rich = distractor) it
+        // does not move at all -- which is why the axis confound of the
+        // both-move version cannot arise here. On invalid trials
+        // (rich = target, now the frequent case) it moves on the cued
+        // axis, which is 50/50 by balancing.
+        var fdAxis = (trialType === 'invalid') ? attendAxis : 'none';
+
+        /* WHAT THE CUE IS. In every phase it is an arrow naming the
+           axis. The response set is the two keys on that axis, and a
+           response on the other axis is an axisError -- i.e. the wrong
+           object was read out. cueText, cueDurMs and nRespAlternatives
+           are constant now that the object-cued block is gone; they are
+           kept so the saved data structure does not change under your
+           parser. */
+        var cueText = attendAxis;
+
+        /* Per-trial amplitude, so the familiarization block can be
+           obvious while everything downstream stays identical. The
+           animation loop reads trialStruct.critAmpPx rather than the
+           global, so this is the only place the two blocks differ. */
+        var trialCritAmpPx = (p === PHASE_FAMILIAR)
+                           ? famCritAmpPx
+                           : uniformRange(critAmpMinPx, critAmpMaxPx);
+
+        tempTrials.push({
+          'phase': p,
+          'block': totalBlock,
+          'trial': t + 1,
+          'richIm': richCategoryName,
+          'richCategoryID': richCategoryID,
+          'nObjectsTraining': nObjectsTraining,
+
+          'targetIm': targetIm,
+          'targetCategory': imageCategories[targetCatID],
+          'targetCategoryID': targetCatID,
+          'targetAppearance': targetAppIdx,
+          'distractorIm': distractorIm,
+          'distractorCategory': imageCategories[distractorCatID],
+          'distractorCategoryID': distractorCatID,
+          'distractorAppearance': distractorAppIdx,
+
+          'targetOnTop': targetOnTop,
+          'trialType': trialType,     // 'valid' / 'invalid' / 'neutral'
+          'exemplarSet': exemplarSet, // 'old' (learning set) / 'new' (testing only)
+          'fdPresent': (trialType !== 'neutral') ? 1 : 0,
+          'fdRole': (trialType === 'invalid') ? 'target'
+                  : (trialType === 'valid')   ? 'distractor' : 'absent',
+          'fdAxis': fdAxis,           // 'none' unless the rich category is the target
+
+          'attendAxis': attendAxis,   // axis the target moves along;
+                                      // cued by the arrow in every phase
+          'targetDir': targetDir,     // correct response
+
+          'cueText': cueText,         // the arrow's axis
+          'cueDurMs': cueDurMs,
+          'nRespAlternatives': 2,
+
+          'critOnsetMs': critOnsetMs, // from stimulus onset
+          'critDurMs': critDurMs,
+          'critAmpPx': trialCritAmpPx,
+          'jiggleSdPx': jiggleSdPx,
+          'jiggleTauMs': jiggleTauMs,
+          'stimDurMs': stimDurMs,
+          'respWindowMs': respWindowMs,
+          'iti': jitter(itiMin, itiMax),
+
+          // filled in at run time
+          'rt': null, 'rtFromCritOnset': null,
+          'feedbackDurUsed': null, 'itiUsed': null,
+          'respKey': null, 'respDir': null, 'respAxis': null,
+          'axisError': null,
+          'acc': null, 'missed': null,
+          'nEarlyPresses': 0,
+          'stimOnsetLag': null,
+          'critOnsetActualMs': null
+        });
+      }
+
+      // ---- n-1 fields, computed here so they never have to be
+      // ---- reconstructed in analysis. Trial 1 of each block gets null.
+      for (var t = 0; t < tempTrials.length; t++) {
+        if (t === 0) {
+          tempTrials[t].prevFDPresent    = null;
+          tempTrials[t].prevTrialType    = null;
+          tempTrials[t].prevExemplarSet  = null;
+          tempTrials[t].prevFDRole       = null;
+          tempTrials[t].prevTargetIm     = null;
+          tempTrials[t].prevDistractorIm = null;
+          tempTrials[t].prevTargetCatID  = null;
+          tempTrials[t].prevAttendAxis   = null;
+          tempTrials[t].attendAxisRepeat = null;
+          tempTrials[t].prevTargetDir    = null;
+          tempTrials[t].prevImageRepeat  = null;
+          tempTrials[t].prevIdentityRepeat = null;
+        }
+        else {
+          var pr = tempTrials[t-1];
+          var cu = tempTrials[t];
+          cu.prevFDPresent    = pr.fdPresent;
+          cu.prevTrialType    = pr.trialType;
+          cu.prevExemplarSet  = pr.exemplarSet;
+          cu.prevFDRole       = pr.fdRole;
+          cu.prevTargetIm     = pr.targetIm;
+          cu.prevDistractorIm = pr.distractorIm;
+          cu.prevTargetCatID  = pr.targetCategoryID;
+          cu.prevAttendAxis   = pr.attendAxis;
+          // axis switches carry a cost of their own; flag them so they
+          // can be modelled or excluded rather than silently averaged in
+          cu.attendAxisRepeat = (pr.attendAxis === cu.attendAxis) ? 1 : 0;
+          cu.prevTargetDir    = pr.targetDir;
+          // did either exact image on this trial also appear on n-1?
+          var prIms = [pr.targetIm, pr.distractorIm];
+          cu.prevImageRepeat =
+            (prIms.indexOf(cu.targetIm) > -1 || prIms.indexOf(cu.distractorIm) > -1) ? 1 : 0;
+          // did either object identity (regardless of appearance) repeat?
+          var prCats = [pr.targetCategoryID, pr.distractorCategoryID];
+          cu.prevIdentityRepeat =
+            (prCats.indexOf(cu.targetCategoryID) > -1 ||
+             prCats.indexOf(cu.distractorCategoryID) > -1) ? 1 : 0;
+        }
+      }
+
+      totalTrials[p].push(tempTrials);
+    }
+  }
+}
+
+/* ================================================================== */
+/* FLOW                                                                */
+/* ================================================================== */
+
+function instructions2() {
+  makeInstructionIms();
+  $('#instructionsPractice').hide();
+  $('#instructionsPractice3').hide();
+  $('#instructionsPractice2').show();
+  $('#showTrial').css({'background-color': bgColor});
+  $('#overlayWindow').css({'background-color': bgColor});
+}
+
+function instructions3() {
+  $('#instructionsPractice').hide();
+  $('#instructionsPractice2').hide();
+  $('#instructionsPractice3').show();
+  $('#showTrial').css({'background-color': bgColor});
+  $('#overlayWindow').css({'background-color': bgColor});
+}
+
+function StartExperiment() {
+  $('#instructionsPractice').hide();
+  $('#instructionsPractice2').hide();
+  $('#instructionsPractice3').hide();
+  $('#instructionsPracticeStart').hide();
+  $('#instructionsMain').hide();
+  $('#done').hide();
+  familiarTrials = []; practiceTrials = []; trainingTrials = []; testTrials = [];
+  totalTrials = [familiarTrials, practiceTrials, trainingTrials, testTrials];
+  GenerateTrials();
+  NextTrial();
+  startExperimentTime = new Date();
+}
+
+function StartPracticeTask() {
+  $('#instructionsPracticeStart').hide();
+  ShowTrial(totalTrials[currentPhase][currentPhaseBlock][currentTrial]);
+}
+
+function StartMainTask() {
+  $('#instructionsMain').hide();
+  ShowTrial(totalTrials[currentPhase][currentPhaseBlock][currentTrial]);
+}
+
+function NextTrial() {
+  currentTrial++;
+  if (currentTrial >= nTrialsPerBlock[currentPhase]) {
+    if (currentPhase == (totalTrials.length - 1) &&
+        currentPhaseBlock == (nBlocks[currentPhase] - 1)) {
+      survey(currentTab);
+      return;
+    }
+    else {
+      currentTrial = 0;
+      currentBlock++;
+      currentPhaseBlock++;
+      if (currentPhaseBlock >= nBlocks[currentPhase]) {
+        currentPhase++;
+        currentPhaseBlock = 0;
+      }
+      if (currentPhase == PHASE_PRACTICE && currentPhaseBlock == 0) {
+        $('#showTrial').hide();
+        $('#instructionsPracticeStart').show();
+        return;
+      }
+      if (currentPhase == PHASE_TRAIN && currentPhaseBlock == 0) {
+        $('#showTrial').hide();
+        $('#instructionsMain').show();
+        return;
+      }
+      // No screen between training and testing: phase 3 begins with the
+      // ordinary block-break screen (NewBlock), so to the participant it
+      // is just the next block.
+      NewBlock(totalTrials[currentPhase][currentPhaseBlock][currentTrial]);
+    }
+  }
+  else {
+    ShowTrial(totalTrials[currentPhase][currentPhaseBlock][currentTrial]);
+  }
+}
+
+function NewBlock(trialStructIn) {
+  $('#showTrial').show();
+  // Training (phase 2) and testing (phase 3) are shown to the participant
+  // as ONE run of blocks, so testing continues the numbering
+  // (e.g. Block 3 of 8) and nothing marks the phase change.
+  var dispBlock = currentPhaseBlock + 1, dispTotal = nBlocks[currentPhase];
+  if (currentPhase == PHASE_TRAIN || currentPhase == PHASE_TEST) {
+    dispTotal = nBlocks[PHASE_TRAIN] + nBlocks[PHASE_TEST];
+    dispBlock = (currentPhase == PHASE_TEST ? nBlocks[PHASE_TRAIN] : 0) + currentPhaseBlock + 1;
+  }
+  $('#pressKeyBlock').html('Start of Block ' + dispBlock + ' of ' + dispTotal +
+    '<br><br>Feel free to take a short break.<br><br> When you are ready to continue,' +
+    '<br> press SPACEBAR to start the next block.');
+  $('#pressKey').hide();
+  $('#pressKeyBlock').show();
+  $(document).bind('keydown.startBlock', function(e) {
+    if (e.which == 32) {
+      e.preventDefault();
+      $(document).unbind('keydown.startBlock');
+      $('#pressKeyBlock').hide();
+      ShowTrial(totalTrials[currentPhase][currentPhaseBlock][currentTrial]);
+    }
+  });
+}
+
+/* ================================================================== */
+/* TRIAL                                                               */
+/* ================================================================== */
+
+function clearTimers() {
+  for (var i = 0; i < pendingTimers.length; i++) { clearTimeout(pendingTimers[i]); }
+  pendingTimers = [];
+  if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+  if (rafID !== null) { cancelAnimationFrame(rafID); rafID = null; }
+}
+
+function axisGlyph(axis) {
+  return (axis === 'horizontal') ? '&#8596;' : '&#8597;';
+}
+
+function axisKeyText(axis) {
+  return (axis === 'horizontal')
+    ? '&#8596; &nbsp; LEFT or RIGHT arrow'
+    : '&#8597; &nbsp; UP or DOWN arrow';
+}
+
+/* The pre-cue itself: an arrow glyph naming the axis. */
+function showCue(ts) {
+  $('#overlayCue').css('font-size', '64px').html(axisGlyph(ts.attendAxis)).show();
+}
+
+/* The persistent reminder under the stimulus. It restates the axis so
+   a lapse of memory does not become an axis error. */
+function reminderText(ts) {
+  return 'Report: ' + axisKeyText(ts.attendAxis);
+}
+
+/* Trials start automatically: there is no spacebar wait and no
+   between-trial screen. The ITI after feedback runs straight into the
+   next trial's cue, so feedback + ITI is now the whole
+   response-to-stimulus interval and is fixed across trials. The only
+   spacebar presses left are the block-break screen (NewBlock) and the
+   instruction buttons. */
+function ShowTrial(trialStructIn) {
+  clearTimers();
+  $('#overlayWindow').hide();
+  $('.overlayItem').hide().css('transform', 'translate(0px, 0px)');
+  $('#overlayCue').hide();
+  $('#overlayFeedback').hide();
+  $('#pressKey').hide();
+  trialStructB = trialStructIn;
+  RunTrial(trialStructB);
+}
+
+/* uniform sample from a disk of radius r -- sqrt on the radius, or
+   samples pile up in the centre */
+/* Standard normal, Box-Muller. Needed for the OU jiggle. */
+function randn() {
+  var u = 0, v = 0;
+  while (u === 0) { u = Math.random(); }
+  while (v === 0) { v = Math.random(); }
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* One OU step on a single layer, using the real elapsed frame time.
+   a = 1 means no time has passed; a = 0 (a very long frame, e.g. the
+   tab was backgrounded) resamples from the stationary distribution,
+   which is the correct limit. */
+function jiggleStep(L, a, sStep) {
+  L.jx = a * L.jx + sStep * randn();
+  L.jy = a * L.jy + sStep * randn();
+  var r = Math.sqrt(L.jx * L.jx + L.jy * L.jy);
+  if (r > jiggleMaxPx) { var f = jiggleMaxPx / r; L.jx *= f; L.jy *= f; }
+}
+
+/* raised-cosine pulse: 0 at u=0, 1 at u=0.5, 0 at u=1, with zero
+   slope at both ends so there is no velocity discontinuity for the
+   participant to catch */
+function critPulse(u) {
+  if (u <= 0 || u >= 1) { return 0; }
+  return (1 - Math.cos(2 * Math.PI * u)) / 2;
+}
+
+function RunTrial(ts) {
+  trialStruct = ts;
+  critStarted = false;
+  critStartTime = null;
+  respOpen = false;
+  respOpenTime = null;
+  lastFrameTime = null;
+
+  var targetSel = ts.targetOnTop ? '#objTop' : '#objBottom';
+  var distSel   = ts.targetOnTop ? '#objBottom' : '#objTop';
+
+  $(targetSel).css('background-image', 'url(' + imDir + ts.targetIm     + imExt + ')');
+  $(distSel).css('background-image',   'url(' + imDir + ts.distractorIm + imExt + ')');
+  $('.overlayItem').css('transform', 'translate(0px, 0px)');
+
+  // layers[0] is always the target: it is the ONLY layer that gets the
+  // displacement pulse. layers[1] jiggles and nothing else.
+  layers = [
+    {sel: targetSel, isTarget: 1, axis: ts.attendAxis, dir: ts.targetDir,
+     jx: 0, jy: 0},
+    {sel: distSel,   isTarget: 0, axis: null, dir: null,
+     jx: 0, jy: 0}
+  ];
+  for (var i = 0; i < layers.length; i++) {
+    // seed from the stationary distribution, so there is no settling
+    // transient at stimulus onset that would mark the display coming up
+    jiggleStep(layers[i], 0, jiggleSdPx);
+  }
+  layers[0].sign = (ts.targetDir === 'left' || ts.targetDir === 'up') ? -1 : 1;
+
+  ts.nEarlyPresses = 0;
+
+  $('#showTrial').hide();
+  $('#overlayWindow').show();
+  $('#overlayFix').html('+').show();
+  $('#overlayWindow').css('cursor', 'none');
+  // a static restatement of the cue, so a momentary lapse of memory
+  // does not become an error. This is the cued axis, which is
+  // orthogonal to the rich-category manipulation.
+  $('#overlayReminder').html(reminderText(ts)).show();
+
+  function onKey(e) {
+    if (respKeys.indexOf(e.which) === -1) { return; }
+    e.preventDefault();
+    if (e.repeat) { return; }
+    if (stimOnsetTime === null) { return; }
+
+    var now = performance.now();
+    var ts2 = trialStruct;
+
+    // the keyboard is live from stimulus onset only so that presses
+    // during the display can be COUNTED; they do not end the trial.
+    // The response window opens at stimulus offset.
+    if (!respOpen) {
+      ts2.nEarlyPresses++;
+      return;
+    }
+
+    $(document).off('keydown.jiggleTask');
+    if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+    if (rafID !== null) { cancelAnimationFrame(rafID); rafID = null; }
+
+    ts2.rt             = Math.round(now - respOpenTime);
+    ts2.rtFromCritOnset = Math.round(now - critStartTime);
+    ts2.respKey    = e.which;
+    ts2.respDir    = keyToDir[e.which];
+    ts2.respAxis   = dirToAxis[ts2.respDir];
+    // a response on the uncued axis means the wrong object was read out
+    ts2.axisError  = (ts2.respAxis !== ts2.attendAxis) ? 1 : 0;
+    ts2.acc        = (ts2.respDir === ts2.targetDir) ? 1 : 0;
+    ts2.missed     = 0;
+
+    ShowFeedback(ts2, 'resp');
+  }
+
+  function endTrialMissed() {
+    $(document).off('keydown.jiggleTask');
+    if (rafID !== null) { cancelAnimationFrame(rafID); rafID = null; }
+    var ts3 = trialStruct;
+    ts3.rt = null; ts3.rtFromCritOnset = null;
+    ts3.respKey = null; ts3.respDir = null; ts3.respAxis = null;
+    ts3.axisError = null;
+    ts3.acc = 0; ts3.missed = 1;
+    ShowFeedback(ts3, 'miss');
+  }
+
+  // ---- pre-cue (axis arrow), then a brief
+  // ---- gap, then the objects
+  showCue(ts);
+  pendingTimers.push(setTimeout(function() { $('#overlayCue').hide(); }, ts.cueDurMs));
+
+  pendingTimers.push(setTimeout(function() {
+    $('.overlayItem').show();
+    stimOnsetTime = null;
+    var requested = performance.now();
+
+    rafID = requestAnimationFrame(function step(now) {
+      if (stimOnsetTime === null) {
+        stimOnsetTime = now;
+        trialStruct.stimOnsetLag = Math.round(now - requested);
+        $(document).on('keydown.jiggleTask', onKey);
+      }
+
+      var elapsed = now - stimOnsetTime;
+
+      // ---- the critical displacement starts
+      if (!critStarted && elapsed >= trialStruct.critOnsetMs) {
+        critStarted = true;
+        critStartTime = now;
+        trialStruct.critOnsetActualMs = Math.round(elapsed);
+      }
+
+      // ---- stimulus offset at a fixed time, which is also when the
+      // ---- response window OPENS. Every trial therefore gets the same
+      // ---- display duration and the same respWindowMs to answer in,
+      // ---- regardless of when the pulse fell. The fixation cross
+      // ---- becomes '?' as the go signal.
+      if (elapsed >= stimDurMs) {
+        cancelAnimationFrame(rafID); rafID = null;
+        $('.overlayItem').hide().css('transform', 'translate(0px, 0px)');
+        $('#overlayFix').html('?');
+        respOpen = true;
+        respOpenTime = now;
+        trialStruct.stimOffsetActualMs = Math.round(elapsed);
+        deadlineTimer = setTimeout(endTrialMissed, respWindowMs);
+        return;
+      }
+
+      // ---- position = ongoing random jiggle, plus the smooth directed
+      // ---- pulse on the TARGET only. The jiggle never stops, so the
+      // ---- pulse is a drift buried in noise rather than a discrete
+      // ---- event.
+      var u = (elapsed - trialStruct.critOnsetMs) / critDurMs;
+      var pulse = trialStruct.critAmpPx * critPulse(u);
+
+      // OU coefficients for THIS frame's actual duration, so the drift
+      // statistics do not depend on the refresh rate
+      var dt = (lastFrameTime === null) ? 0 : (now - lastFrameTime);
+      lastFrameTime = now;
+      var a     = (dt > 0) ? Math.exp(-dt / jiggleTauMs) : 1;
+      var sStep = jiggleSdPx * Math.sqrt(1 - a * a);
+
+      for (var i = 0; i < layers.length; i++) {
+        var L = layers[i];
+        jiggleStep(L, a, sStep);
+        var dx = L.jx, dy = L.jy;
+        if (L.isTarget) {
+          if (L.axis === 'horizontal') { dx += L.sign * pulse; }
+          else                         { dy += L.sign * pulse; }
+        }
+        $(L.sel).css('transform',
+          'translate(' + dx.toFixed(2) + 'px, ' + dy.toFixed(2) + 'px)');
+      }
+
+      rafID = requestAnimationFrame(step);
+    });
+
+  }, ts.cueDurMs + cueGapMs));
+}
+
+function ShowFeedback(ts, why) {
+  if (rafID !== null) { cancelAnimationFrame(rafID); rafID = null; }
+  if (deadlineTimer) { clearTimeout(deadlineTimer); deadlineTimer = null; }
+  $('.overlayItem').hide().css('transform', 'translate(0px, 0px)');
+  $('#overlayCue').hide();
+  $('#overlayReminder').hide();
+  $('#overlayFix').hide();
+
+  var giveFeedback = (currentPhase <= PHASE_PRACTICE) || feedbackInMain;
+
+  if (!giveFeedback) {
+    pendingTimers.push(setTimeout(function() {
+      $('#overlayWindow').hide();
+      NextTrial();
+    }, ts.iti));
+    return;
+  }
+
+  var html = "";
+  if (why === 'miss') {
+    html += "<font color=black><b>Too slow</b></font><br><br>Please respond faster.<br><br>";
+  }
+  else if (ts.axisError) {
+    // worth calling out separately: this is not a hard trial, it is
+    // the wrong object having been read out.
+    html += "<font color=black><b>Wrong axis</b></font><br><br>You were cued " +
+            axisGlyph(ts.attendAxis) + " on this trial, so the answer was " +
+            (ts.attendAxis === 'horizontal' ? "LEFT or RIGHT" : "UP or DOWN") +
+            ".<br><br>";
+  }
+  else if (ts.acc) {
+    html += "<font color=black><b>Correct</b></font><br><br>";
+  }
+  else {
+    html += "<font color=black><b>Incorrect</b></font><br><br>PLEASE TRY HARDER!<br><br>";
+  }
+
+  $('#overlayFeedback').html(html).show();
+  $('#overlayWindow').css('cursor', 'default');
+
+  // longer screen for anything that is not a plain correct response,
+  // with the ITI shortened by the same amount so feedback + ITI is
+  // constant across outcomes. Both values are logged.
+  var fbDur   = (why === 'resp' && ts.acc && !ts.axisError)
+              ? feedbackDurMs : feedbackErrorDurMs;
+  var itiUsed = Math.max(itiFloorMs, ts.iti - (fbDur - feedbackDurMs));
+  ts.feedbackDurUsed = fbDur;
+  ts.itiUsed         = itiUsed;
+
+  // both timers go in pendingTimers so clearTimers() can kill them
+  pendingTimers.push(setTimeout(function() {
+    $('#overlayFeedback').hide();
+    pendingTimers.push(setTimeout(function() {
+      $('#overlayWindow').hide();
+      NextTrial();
+    }, itiUsed));
+  }, fbDur));
+}
+
+
+/* ================================================================== */
+/* MISC                                                               */
+/* ================================================================== */
+
+function makeInstructionIms() {
+  // the practice instructions preview the appearances used in the task
+  usedSetLetters = trainingLetters.slice();
+  for (i = 0; i < nCategories; i++) {
+    $('#searchInstructions' + (i+1)).addClass("instructionsColorCircle" + (i+1));
+    $('#searchInstructions' + (i+1)).css('background-size', 90);
+    $('#searchInstructions' + (i+1)).css('filter', 'grayscale(1)');
+    $('#searchInstructions' + (i+1)).css('background-image',
+      'url(' + imDir + 'obj' + (i+1) + usedSetLetters[0] + imExt + ')');
+  }
+}
+
+/* Unpack a condition number into the two counterbalanced variables
+   and everything derived from them. See COUNTERBALANCING. */
+function ApplyCondition(cond, source) {
+  assignedCond     = cond;
+  assignSource     = source;
+  var r = Math.floor(cond / nCategories), k = cond % nCategories;
+  richCategoryID   = k;
+  mainSetLetter    = alphabet[(k + r) % nObjects];
+  richCategoryName = imageCategories[richCategoryID];
+  expVersion       = richCategoryName + trainingNumberStr + mainSetLetter;
+  curID            = baseID + '_c' + cond;   // the DataPipe file name
+}
+
+/* Ask the server for a condition, then call done(). Never blocks the
+   participant for longer than the timeout: on any failure a random
+   condition is used instead. */
+function AssignCondition(done) {
+  // Single fix-up: ?cond=N still forces one condition.
+  var urlCond = new URLSearchParams(window.location.search).get('cond');
+  if (urlCond !== null) {
+    var c = parseInt(urlCond, 10);
+    if (String(c) === urlCond && c >= 0 && c < nAssignConds) {
+      ApplyCondition(c, 'url'); done(); return;
+    }
+    console.error('Ignoring invalid cond in URL: ' + urlCond);
+  }
+
+  var finished = false;
+  function finish(cond, source) {
+    if (finished) { return; }
+    finished = true;
+    ApplyCondition(cond, source);
+    done();
+  }
+  function fallback() {
+    finish(REFILL_CONDS[Math.floor(Math.random() * REFILL_CONDS.length)], 'fallback');
+  }
+  var timer = setTimeout(fallback, 10000);
+  fetch(assignURL, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Accept': '*/*'},
+    body: JSON.stringify({experimentID: DATAPIPE_EXPERIMENT_ID})
+  }).then(function (r) { return r.json(); })
+    .then(function (res) {
+      clearTimeout(timer);
+      if (res && typeof res.condition === 'number' &&
+          res.condition >= 0 && res.condition < REFILL_CONDS.length) {
+        finish(REFILL_CONDS[res.condition], 'refill');
+      } else {
+        console.error('DataPipe condition request failed:', res);
+        fallback();
+      }
+    })
+    .catch(function (err) {
+      clearTimeout(timer);
+      console.error('DataPipe condition request failed:', err);
+      fallback();
+    });
+}
+
+$(window).load(function () {
+  // the spinner stays up until a condition is in hand, because the
+  // appearance set and the rich category both depend on it
+  AssignCondition(function () {
+    GenerateObjects();
+    LayoutOverlay();
+    $('.instructionStim').show();
+    $('.startExperimentButton').show();
+    $('#loading').hide();
+  });
+});
+
+/* ================================================================== */
+/* SURVEY                                                              */
+/* ================================================================== */
+
+function survey(n) {
+  var y = document.getElementById("survey");
+  y.style.display = "block";
+  var x = document.getElementsByClassName("tab");
+  x[n].style.display = "block";
+  var z = document.getElementById("nextBtn");
+  z.style.display = "block";
+  if (n == (x.length - 1)) { $('#nextBtn').hide(); }
+  else { $('#nextBtn').show(); }
+}
+
+function nextPrev(n) {
+  var x = document.getElementsByClassName("tab");
+  x[currentTab].style.display = "none";
+  currentTab = currentTab + n;
+  if (currentTab >= x.length) { return false; }
+  survey(currentTab);
+}
+
+function Done() {
+  /* One entry per element with class="survey", in document order:
+     yn, ynConf, 5 objAFC radios, objAFCConf, comments, gender, age,
+     handedness, hispanic, 7 race checkboxes = 20.
+
+     NOTE: the race checkboxes fall into the else branch and record
+     .value whether or not they are checked, so race responses are
+     logged even when unselected. Pre-existing; left alone so the saved
+     data structure does not change under your parser, but worth
+     fixing when you next touch the survey. */
+  var answers = ['Yes', 'na',
+                 richCategoryName, richCategoryName, richCategoryName,
+                 richCategoryName, richCategoryName,
+                 'na', 'na', 'na', 'na', 'na', 'na',
+                 'na', 'na', 'na', 'na', 'na', 'na', 'na'];
+  var inputs = document.getElementsByClassName('survey');
+  for (var i = 0; i < inputs.length; i++) {
+    var answer = answers[i];
+    if (inputs[i].type == "radio") {
+      if (inputs[i].checked) {
+        var response = inputs[i].value.substr(inputs[i].value.length-1);
+        var response = imageCategories[response-1];
+        if (response == answer) { acc = 1; } else { acc = 0; }
+        surveyResponses.push({
+          'id': "objAFC", 'response': response, 'answer': answer, 'accuracy': acc
+        });
+      }
+    }
+    else if (inputs[i].type == "checkbox") {
+      surveyResponses.push({
+        'id': inputs[i].id,
+        'response': inputs[i].checked ? inputs[i].value : 'notSelected',
+        'answer': answer, 'accuracy': 'na'
+      });
+    }
+    else {
+      var response = inputs[i].value;
+      if (answers[i] == "na") { acc = "na"; }
+      else {
+        if (inputs[i].value == answers[i]) { acc = 1; } else { acc = 0; }
+      }
+      surveyResponses.push({
+        'id': inputs[i].id, 'response': response, 'answer': answer, 'accuracy': acc
+      });
+    }
+  }
+  $('#doneText').show();
+  $('#survey').hide();
+}
+
+/* SaveAndReturn() is defined in SaveAndReturn.js. */
+
+function ReturnToSona() {
+  var urlToRedirect = "https://app.prolific.com/submissions/complete?cc=CRKCZGZH";
+  window.location.href = urlToRedirect;
+}
+
+</script>
+
+<!-- ================================================================ -->
+<!-- Between-trial screen -->
+<div id="showTrial">
+  <div id="allItems"><div id="itemBack1"></div></div>
+  <div id="pressKey">Press a key to start this trial.</div>
+  <div id="pressKeyBlock"></div>
+</div>
+
+<!-- Overlay stimulus window -->
+<div id="overlayWindow">
+  <div id="overlayWrap">
+    <div id="objBottom" class="overlayItem"></div>
+    <div id="objTop"    class="overlayItem"></div>
+  </div>
+  <div id="overlayFix">+</div>
+  <div id="overlayCue"></div>
+  <div id="overlayReminder"></div>
+  <div id="overlayFeedback"></div>
+</div>
+
+<!-- Survey -->
+<div id="survey">
+  <div class = "tab">
+    Done with the task, thanks for participating! Before you go, please
+    answer a few brief questions. If you are not sure, make your best guess.<br><br><br>
+
+      1. During the task, did some objects appear more frequently as the
+      object you had to report (the one that made the bigger
+      movement)?<br><br>
+      <select class = "survey" id="yn" name="q1" style="font-family: Arial, Helvetica">
+          <option value="---">---</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option></select>
+          <br><br><br><br><br><br><br>
+
+      2. How confident are you in this answer? <br>
+      <div class="range">
+        <input class = "survey" type="range"  id = "ynConf" name = "q2" min="1" max="5" steps="1" value="3">
+      </div>
+      1&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;2&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;
+      3&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;4&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;
+      5
+      <br>
+      Not at all&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;
+      Somewhat&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;
+      Very
+      <br>
+      confident&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;
+      confident&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;
+      confident
+  </div>
+
+  <div id = "afcQ" class = "tab">
+    3. Actually, items from one category did appear most often as the
+    object you had to report. <br>
+    Which of the 5 categories was it?<br><br>
+
+    <form id = "objAFC" name = "q3">
+      <input class = "survey" type="radio" id="object1" name="objectID" value="obj1">
+        <label for="object1"> Animals</label><br>
+      <input class = "survey" type="radio" id="object2" name="objectID" value="obj2">
+        <label for="object2"> Fruits or Vegetables</label><br>
+      <input class = "survey" type="radio" id="object3" name="objectID" value="obj3">
+        <label for="object3"> Musical Instruments</label><br>
+      <input class = "survey" type="radio" id="object4" name="objectID" value="obj4">
+        <label for="object4"> Sports Equipment</label><br>
+      <input class = "survey" type="radio" id="object5" name="objectID" value="obj5">
+        <label for="object5"> Tools </label><br>
+    </form>
+    <br><br><br>
+
+    4. How confident are you in this answer? <br>
+    <div class="range">
+      <input class = "survey" type="range" id = "objAFCConf" name = "q4" min="1" max="5" steps="1" value="3">
+    </div>
+    1&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;2&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;
+    3&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;4&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;
+    5
+    <br>
+    Not at all&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;
+    Somewhat&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;
+    Very
+    <br>
+    confident&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;
+    confident&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&ensp;
+    confident
+  </div>
+
+  <div id = "ImgAnswer" class = "tab">
+    <div id = "richIm">
+      In case you were curious, the category you most often had to report
+      was: <br><br> <b><span id = "ImgAnswerText"></span></b> <br> <br>
+      On each trial, two object categories were superimposed at the centre of
+      the screen, both jiggling, and at one moment one of them made a larger
+      movement — the one you had to report. An arrow told you which axis that
+      movement would be along. For most of the experiment, on 60% of trials the
+      <b><span id="ImgAnswerText2"></span></b> category was the object that
+      made that movement, so it was the one you reported. On 20% of trials it
+      was present but did <em>not</em> move. On the remaining 20% it did not
+      appear at all. In the later blocks, a third of the trials showed new
+      pictures of the same objects. On those trials the
+      <b><span id="ImgAnswerText2b"></span></b> category was the one that moved
+      on 20% of trials, was present but did not move on 20%, and did not appear
+      on the remaining 60%; with the pictures you had already seen, the
+      proportions stayed as before. Throughout, each of the 5 categories was
+      the object that did not move on about 20% of trials. <br><br>
+      The goal of this experiment is to understand how the frequency with which
+      an object is the thing you need to attend to affects your
+      performance.
+    </div>
+  </div>
+
+  <div id = "demographics" class = "tab">
+    <div id="comments">5. Do you have any comments for us?
+      (Was it fun? Comments on strategies you used or how you answered survey questions? Any technical difficulties?)<br><br>
+      <textarea class = "survey" name="comments" name="q5" id="comments" style="width: 400px; height: 130px"></textarea>
+      <br><br>
+
+    Finally, if you don't mind, please tell us your gender and age:<br><br>
+  6. Gender: <select class = "survey" id="gender" name="q6" style="font-family: Arial, Helvetica">
+      <option value="---">---</option>
+      <option value="notSay">Prefer not to say</option>
+      <option value="male">Male</option>
+      <option value="female">Female</option>
+      <option value="non-binary">Non-binary</option>
+    </select>
+    &nbsp; &nbsp;
+    7. Age: <input class = "survey" type="text" id="age" name="q7"  maxlength="4"  style="font-family: Arial, Helvetica" size="4"
+          onkeydown="return ( event.ctrlKey || event.altKey
+                              || (47<event.keyCode && event.keyCode<58 && event.shiftKey==false)
+                              || (95<event.keyCode && event.keyCode<106)
+                              || (event.keyCode==8) || (event.keyCode==9)
+                              || (event.keyCode>34 && event.keyCode<40)
+                              || (event.keyCode==46) )">
+    <br><br>
+
+    8. Handedness: <select class = "survey" id="handedness" name="q8" style="font-family: Arial, Helvetica">
+        <option value="---">---</option>
+        <option value="notSay">Prefer not to say</option>
+        <option value="right">Right-handed</option>
+        <option value="left">Left-handed</option>
+        <option value="both">Ambidextrous</option>
+    </select>
+    <br><br>
+
+    9. Are you of Hispanic, Latino, or Spanish origin?<br>
+    <select class = "survey" id="hispanic" name="q9" style="font-family: Arial, Helvetica">
+        <option value="---">---</option>
+        <option value="notSay">Prefer not to say</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+    </select>
+    <br><br>
+
+    10. Race (select all that apply):<br>
+    <input class="survey" type="checkbox" id="raceAmIndian" name="race" value="AmericanIndianAlaskaNative"> <label for="raceAmIndian">American Indian or Alaska Native</label><br>
+    <input class="survey" type="checkbox" id="raceAsian" name="race" value="Asian"> <label for="raceAsian">Asian</label><br>
+    <input class="survey" type="checkbox" id="raceBlack" name="race" value="BlackAfricanAmerican"> <label for="raceBlack">Black or African American</label><br>
+    <input class="survey" type="checkbox" id="raceHawaiian" name="race" value="NativeHawaiianPacificIslander"> <label for="raceHawaiian">Native Hawaiian or Other Pacific Islander</label><br>
+    <input class="survey" type="checkbox" id="raceWhite" name="race" value="White"> <label for="raceWhite">White</label><br>
+    <input class="survey" type="checkbox" id="raceOther" name="race" value="Other"> <label for="raceOther">Other</label><br>
+    <input class="survey" type="checkbox" id="raceNotSay" name="race" value="notSay"> <label for="raceNotSay">Prefer not to say</label><br>
+    </div>
+  </div>
+
+  <div style="overflow:auto;">
+    <div>
+      <br><br>
+      <button id = "nextBtn" type="button" onclick="nextPrev(1)">Next</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="doneText" class = "tab" style="display:none">
+  <center>All done, thanks for your participation! <br><br>
+    If you have issues, comments, or questions, please contact Yifan Fang at yifan.fang.gr@dartmouth.edu.<br><br></center><br>
+    <a  href="javascript:SaveAndReturn()" onclick="Done()" id="SubmitButton">Press to submit data and complete the experiment.</a>
+</div>
+
+<div id="screenTooSmall" style="position: fixed; top: 0px; left: 0px; bottom: 0px; right: 0px; z-index: 5000; background-color: white; padding: 10%; text-align: center; font-size: 25pt;">
+  The current browser window is too small to show the experiment. Please ensure the width and height of the browser is at least 800x600 pixels to complete the experiment.
+</div>
+
+</head>
+<body>
+</body></html>
